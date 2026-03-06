@@ -13,5 +13,6 @@ class Settings:
     proxy_port: int = int(os.getenv("PROXY_PORT", "4040"))
     prefetch_count: int = int(os.getenv("PREFETCH_COUNT", "3"))
     ytdlp_format: str = os.getenv("YTDLP_FORMAT", "bestaudio[ext=opus]/bestaudio")
+    ytdlp_path: str = os.getenv("YTDLP_PATH", "yt-dlp")
 
 settings = Settings()

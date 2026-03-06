@@ -68,7 +68,7 @@ class DownloadQueue:
 
             out_template = str(self._output_path(artist, title, virt_id))
             cmd = [
-                "yt-dlp",
+                settings.ytdlp_path,
                 "-f", self._format,
                 "-o", out_template,
                 "--no-playlist",

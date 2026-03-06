@@ -24,12 +24,17 @@ _sync_task: asyncio.Task | None = None
 async def startup():
     await track_index.init()
     await download_queue.init()
+    # Синк запускается в фоне, не блокирует старт
+    asyncio.create_task(_initial_sync())
+
+
+async def _initial_sync():
     try:
         await track_index.sync_from_gonic(
             settings.gonic_url, settings.gonic_user, settings.gonic_pass
         )
     except Exception:
-        pass  # GONIC может быть недоступен при старте
+        pass
 
 
 async def _sync_loop():

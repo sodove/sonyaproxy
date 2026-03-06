@@ -1,12 +1,13 @@
 import asyncio, json
 from typing import Any
 from normalizer import normalize
+from config import settings
 
 
 async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, Any]]:
     """Поиск через yt-dlp для одного источника (ytsearch / scsearch)."""
     cmd = [
-        "yt-dlp",
+        settings.ytdlp_path,
         f"{prefix}{count}:{query}",
         "--flat-playlist",
         "--print", "%()j",
