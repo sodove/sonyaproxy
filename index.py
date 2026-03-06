@@ -45,16 +45,18 @@ class TrackIndex:
                 if not songs:
                     break
                 for song in songs:
-                    await self.upsert(
-                        id=song["@id"],
-                        artist=song.get("@artist", ""),
-                        album=song.get("@album", ""),
-                        title=song.get("@title", "")
+                    key = normalize(song.get("@title", ""))
+                    await self._conn.execute(
+                        """INSERT OR REPLACE INTO track_index (id, artist, album, title, normalized_key)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (song["@id"], song.get("@artist", ""), song.get("@album", ""),
+                         song.get("@title", ""), key)
                     )
+                # один commit на страницу (500 треков) вместо 500 отдельных
+                await self._conn.commit()
                 if len(songs) < 500:
                     break
                 offset += 500
-        await self._conn.commit()
 
     async def close(self):
         if self._conn:

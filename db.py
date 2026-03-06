@@ -29,6 +29,8 @@ CREATE INDEX IF NOT EXISTS idx_track_normalized ON track_index(normalized_key);
 async def init_db(path: str = "sonyaproxy.db") -> aiosqlite.Connection:
     conn = await aiosqlite.connect(path)
     conn.row_factory = aiosqlite.Row
+    await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA synchronous=NORMAL")
     await conn.execute(CREATE_TRACK_INDEX)
     await conn.execute(CREATE_DOWNLOADS)
     await conn.execute(CREATE_INDEX_ON_NORMALIZED)
