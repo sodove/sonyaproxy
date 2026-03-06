@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  sonyaproxy:
+    build: .
+    volumes:
+      - ${GONIC_MUSIC_DIR:-/music}:${GONIC_MUSIC_DIR:-/music}
+    env_file: .env
+    ports:
+      - "${PROXY_PORT:-4040}:${PROXY_PORT:-4040}"
+    restart: unless-stopped
