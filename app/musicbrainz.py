@@ -8,6 +8,7 @@ logger = logging.getLogger("sonyaproxy.musicbrainz")
 musicbrainzngs.set_useragent("sonyaproxy", "0.1", "https://github.com/sonyaproxy")
 
 _ENRICH_TIMEOUT = 5
+_MB_SEMAPHORE = asyncio.Semaphore(1)
 
 
 def _search_sync(artist: str, title: str) -> dict | None:
@@ -31,12 +32,13 @@ def _search_sync(artist: str, title: str) -> dict | None:
 
 async def enrich_track(track: dict[str, Any]) -> dict[str, Any]:
     try:
-        mb_data = await asyncio.wait_for(
-            asyncio.to_thread(
-                _search_sync, track.get("artist", ""), track.get("title", "")
-            ),
-            timeout=_ENRICH_TIMEOUT,
-        )
+        async with _MB_SEMAPHORE:
+            mb_data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _search_sync, track.get("artist", ""), track.get("title", "")
+                ),
+                timeout=_ENRICH_TIMEOUT,
+            )
     except asyncio.TimeoutError:
         logger.warning("MusicBrainz timeout for %s - %s", track.get("artist"), track.get("title"))
         return track
@@ -50,5 +52,8 @@ async def enrich_track(track: dict[str, Any]) -> dict[str, Any]:
     return track
 
 
-async def enrich_tracks(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return list(await asyncio.gather(*[enrich_track(t) for t in tracks]))
+async def enrich_tracks(
+    tracks: list[dict[str, Any]], max_enrich: int = 5
+) -> list[dict[str, Any]]:
+    head = list(await asyncio.gather(*[enrich_track(t) for t in tracks[:max_enrich]]))
+    return head + tracks[max_enrich:]
