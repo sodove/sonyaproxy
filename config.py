@@ -12,7 +12,12 @@ class Settings:
     gonic_music_dir: str = os.getenv("GONIC_MUSIC_DIR", "/music")
     proxy_port: int = int(os.getenv("PROXY_PORT", "4040"))
     prefetch_count: int = int(os.getenv("PREFETCH_COUNT", "3"))
-    ytdlp_format: str = os.getenv("YTDLP_FORMAT", "bestaudio[ext=opus]/bestaudio")
+    ytdlp_format: str = os.getenv("YTDLP_FORMAT", "bestaudio")
+    ytdlp_audio_format: str = os.getenv("YTDLP_AUDIO_FORMAT", "mp3")
     ytdlp_path: str = os.getenv("YTDLP_PATH", "yt-dlp")
+    autopop_enabled: bool = os.getenv("AUTOPOP_ENABLED", "false").lower() == "true"
+    autopop_flavor_path: str = os.getenv("AUTOPOP_FLAVOR_PATH", "flavor.yml")
+    autopop_startup_delay: int = int(os.getenv("AUTOPOP_STARTUP_DELAY", "60"))
+    db_path: str = os.getenv("DB_PATH", "sonyaproxy.db")
 
 settings = Settings()

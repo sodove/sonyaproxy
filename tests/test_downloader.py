@@ -85,7 +85,7 @@ async def test_rescan_triggered_after_download(tmp_path):
 
     rescan_called = False
 
-    async def mock_rescan(self_inner, url, user, pwd):
+    async def mock_rescan(self_inner):
         nonlocal rescan_called
         rescan_called = True
 
@@ -101,7 +101,7 @@ async def test_rescan_triggered_after_download(tmp_path):
         return P()
 
     with patch("asyncio.create_subprocess_exec", mock_exec), \
-         patch.object(DownloadQueue, "_trigger_rescan", mock_rescan):
+         patch.object(DownloadQueue, "trigger_rescan", mock_rescan):
         await q.download("virt_x", "https://yt.com/x", "A", "B")
 
     assert rescan_called

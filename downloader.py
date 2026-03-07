@@ -23,19 +23,20 @@ class DownloadQueue:
         folder = Path(self._music_dir) / "Virtual Downloads" / self._safe_path(artist) / "Singles"
         return folder / f"{self._safe_path(title)}__{youtube_id}.%(ext)s"
 
-    async def _trigger_rescan(self, gonic_url: str, user: str, password: str):
-        """Запустить пересканирование библиотеки GONIC."""
+    async def trigger_rescan(self):
+        """Trigger GONIC library rescan."""
         try:
             async with httpx.AsyncClient() as client:
                 await client.get(
-                    f"{gonic_url}/rest/startScan",
-                    params={"u": user, "p": password, "v": "1.16.1", "c": "sonyaproxy"},
+                    f"{settings.gonic_url}/rest/startScan",
+                    params={"u": settings.gonic_user, "p": settings.gonic_pass, "v": "1.16.1", "c": "sonyaproxy"},
                 )
         except Exception:
             pass
 
     async def download(
-        self, virt_id: str, youtube_url: str, artist: str, title: str
+        self, virt_id: str, youtube_url: str, artist: str, title: str,
+        trigger_rescan: bool = True,
     ) -> str:
         # Проверить done в БД
         async with self._conn.execute(
@@ -70,6 +71,7 @@ class DownloadQueue:
             cmd = [
                 settings.ytdlp_path,
                 "-f", self._format,
+                "-x", "--audio-format", settings.ytdlp_audio_format,
                 "-o", out_template,
                 "--no-playlist",
                 youtube_url,
@@ -85,7 +87,7 @@ class DownloadQueue:
             folder = Path(out_template).parent
             youtube_id = virt_id.removeprefix("virt_")
             matches = list(folder.glob(f"*{youtube_id}*"))
-            local_path = str(matches[0]) if matches else out_template.replace("%(ext)s", "opus")
+            local_path = str(matches[0]) if matches else out_template.replace("%(ext)s", settings.ytdlp_audio_format)
 
             await self._conn.execute(
                 "UPDATE downloads SET status='done', local_path=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -93,7 +95,8 @@ class DownloadQueue:
             )
             await self._conn.commit()
 
-            await self._trigger_rescan(settings.gonic_url, settings.gonic_user, settings.gonic_pass)
+            if trigger_rescan:
+                await self.trigger_rescan()
 
             return local_path
 

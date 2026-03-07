@@ -11,14 +11,15 @@ import httpx
 
 app = FastAPI(title="sonyaproxy")
 
-track_index = TrackIndex()
+track_index = TrackIndex(db_path=settings.db_path)
 download_queue = DownloadQueue(
-    db_path="sonyaproxy.db",
+    db_path=settings.db_path,
     music_dir=settings.gonic_music_dir,
     ytdlp_format=settings.ytdlp_format,
 )
 
 _sync_task: asyncio.Task | None = None
+_autopop_task: asyncio.Task | None = None
 
 
 async def startup():
@@ -48,11 +49,19 @@ async def _sync_loop():
             pass
 
 
+async def _start_autopop():
+    await asyncio.sleep(settings.autopop_startup_delay)
+    from autopop import autopop_loop
+    await autopop_loop(track_index, download_queue, settings.autopop_flavor_path)
+
+
 @app.on_event("startup")
 async def on_startup():
-    global _sync_task
+    global _sync_task, _autopop_task
     await startup()
     _sync_task = asyncio.create_task(_sync_loop())
+    if settings.autopop_enabled:
+        _autopop_task = asyncio.create_task(_start_autopop())
 
 
 @app.api_route("/rest/{path:path}", methods=["GET", "POST"])
@@ -108,7 +117,34 @@ async def _prefetch(vt: dict):
         pass
 
 
+async def _verify_client_auth(params: dict) -> bool:
+    """Verify client credentials against gonic via ping."""
+    auth_params = {k: v for k, v in params.items() if k in ("u", "p", "t", "s", "v", "c", "f")}
+    if "u" not in auth_params:
+        return False
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{settings.gonic_url}/rest/ping",
+                params=auth_params,
+            )
+            return r.status_code == 200 and "error" not in r.text.lower()
+    except Exception:
+        return False
+
+
 async def handle_virtual_stream(request: Request, params: dict) -> Response:
+    # Verify client auth before serving virtual content
+    if not await _verify_client_auth(params):
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?>'
+            '<subsonic-response status="failed" version="1.16.1">'
+            '<error code="40" message="Wrong username or password"/>'
+            '</subsonic-response>',
+            media_type="application/xml",
+            status_code=401,
+        )
+
     virt_id = params["id"]
     youtube_id = virt_id.removeprefix("virt_")
 
@@ -119,8 +155,13 @@ async def handle_virtual_stream(request: Request, params: dict) -> Response:
         title=youtube_id,
     )
 
+    from pathlib import Path
+    ext = Path(local_path).suffix.lstrip(".")
+    mime_map = {"mp3": "audio/mpeg", "opus": "audio/opus", "m4a": "audio/mp4", "ogg": "audio/ogg"}
+    media_type = mime_map.get(ext, "audio/mpeg")
+
     return FileResponse(
         path=local_path,
-        media_type="audio/opus",
-        filename=f"{youtube_id}.opus",
+        media_type=media_type,
+        filename=f"{youtube_id}.{ext}",
     )

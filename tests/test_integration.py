@@ -42,7 +42,8 @@ async def test_stream_virtual_triggers_download(tmp_path):
 
     mock_download = AsyncMock(return_value=str(tmp_path / "file.opus"))
     (tmp_path / "file.opus").write_bytes(b"fake audio")
-    with patch.object(main.download_queue, "download", mock_download):
+    with patch.object(main.download_queue, "download", mock_download), \
+         patch("main._verify_client_auth", AsyncMock(return_value=True)):
         transport = ASGITransport(app=main.app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/rest/stream?id=virt_dQw4w9WgXcQ&u=a&p=b&v=1.16.1&c=test")

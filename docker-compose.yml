@@ -1,10 +1,17 @@
-version: "3.9"
 services:
   sonyaproxy:
     build: .
+    container_name: sonyaproxy
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
     volumes:
       - ${GONIC_MUSIC_DIR:-/music}:${GONIC_MUSIC_DIR:-/music}
-    env_file: .env
-    ports:
-      - "${PROXY_PORT:-4040}:${PROXY_PORT:-4040}"
-    restart: unless-stopped
+      - ./flavor.yml:/app/flavor.yml:ro
+      - sonyaproxy-data:/app/data
+    environment:
+      - YTDLP_PATH=yt-dlp
+      - DB_PATH=/app/data/sonyaproxy.db
+
+volumes:
+  sonyaproxy-data:
