@@ -68,8 +68,6 @@ class DownloadQueue:
                 settings.ytdlp_path,
                 "-f", self._format,
                 "-x", "--audio-format", settings.ytdlp_audio_format,
-                "--no-embed-metadata",
-                "--postprocessor-args", f"ffmpeg:-metadata artist={artist} -metadata title={title}",
                 "-o", out_template,
                 "--no-playlist",
                 youtube_url,
@@ -85,6 +83,25 @@ class DownloadQueue:
             youtube_id = virt_id.removeprefix("virt_")
             matches = list(folder.glob(f"*{youtube_id}*"))
             local_path = str(matches[0]) if matches else out_template.replace("%(ext)s", settings.ytdlp_audio_format)
+
+            # Write ID3 tags via ffmpeg
+            if Path(local_path).exists():
+                tagged = local_path + ".tagged.mp3"
+                tag_cmd = [
+                    "ffmpeg", "-y", "-i", local_path,
+                    "-c", "copy",
+                    "-metadata", f"artist={artist}",
+                    "-metadata", f"title={title}",
+                    tagged,
+                ]
+                tag_proc = await asyncio.create_subprocess_exec(
+                    *tag_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await tag_proc.communicate()
+                if tag_proc.returncode == 0:
+                    Path(tagged).replace(local_path)
 
             await self._conn.execute(
                 "UPDATE downloads SET status='done', local_path=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
