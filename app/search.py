@@ -24,7 +24,8 @@ async def augment_search3(
 ) -> str:
     data = xmltodict.parse(gonic_xml)
     resp = data["subsonic-response"]
-    sr3 = resp.setdefault("searchResult3", {})
+    sr3 = resp.get("searchResult3") or {}
+    resp["searchResult3"] = sr3
 
     existing_songs = sr3.get("song", [])
     if isinstance(existing_songs, dict):
