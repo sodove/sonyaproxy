@@ -116,10 +116,6 @@ async def handle_search3(request: Request, params: dict) -> Response:
         index=track_index,
     )
 
-    top_virtuals = virtual_tracks[:settings.prefetch_count]
-    for vt in top_virtuals:
-        asyncio.create_task(_prefetch(vt))
-
     return Response(
         content=augmented_xml.encode(),
         media_type="application/xml",

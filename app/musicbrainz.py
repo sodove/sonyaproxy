@@ -53,7 +53,7 @@ async def enrich_track(track: dict[str, Any]) -> dict[str, Any]:
 
 
 async def enrich_tracks(
-    tracks: list[dict[str, Any]], max_enrich: int = 5
+    tracks: list[dict[str, Any]], max_enrich: int = 3
 ) -> list[dict[str, Any]]:
     head = list(await asyncio.gather(*[enrich_track(t) for t in tracks[:max_enrich]]))
     return head + tracks[max_enrich:]
