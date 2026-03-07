@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
 from app.config import settings
@@ -8,6 +9,8 @@ from app.downloader import DownloadQueue
 from app.ytdlp import search_virtual
 from app.search import augment_search3
 import httpx
+
+logger = logging.getLogger("sonyaproxy")
 
 app = FastAPI(title="sonyaproxy")
 
@@ -54,11 +57,30 @@ async def _start_autopop():
     await autopop_loop(track_index, download_queue, settings.autopop_flavor_path)
 
 
+_YTDLP_UPDATE_INTERVAL = 24 * 3600  # once per day
+
+
+async def _ytdlp_update_loop():
+    while True:
+        await asyncio.sleep(_YTDLP_UPDATE_INTERVAL)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                settings.ytdlp_path, "-U",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            logger.info("yt-dlp update: %s", stdout.decode().strip())
+        except Exception:
+            logger.warning("yt-dlp update failed", exc_info=True)
+
+
 @app.on_event("startup")
 async def on_startup():
     global _sync_task, _autopop_task
     await startup()
     _sync_task = asyncio.create_task(_sync_loop())
+    asyncio.create_task(_ytdlp_update_loop())
     if settings.autopop_enabled:
         _autopop_task = asyncio.create_task(_start_autopop())
 
