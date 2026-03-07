@@ -10,36 +10,43 @@ logger = logging.getLogger("sonyaproxy.charts")
 
 
 async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
-    tasks: list[asyncio.Task] = []
-
-    # YT Music: one request per unique region
+    # YT Music: parallel per region
+    yt_tasks: list[asyncio.Task] = []
     total_per_region: dict[str, int] = {}
     for q in quotas:
         region = q["region"]
         total_per_region[region] = total_per_region.get(region, 0) + q["count"]
 
-    seen_regions: set[str] = set()
     for region, count in total_per_region.items():
-        if region not in seen_regions:
-            seen_regions.add(region)
-            tasks.append(asyncio.ensure_future(
-                fetch_ytmusic_chart(region, limit=count)
-            ))
+        yt_tasks.append(asyncio.ensure_future(
+            fetch_ytmusic_chart(region, limit=count)
+        ))
 
-    # SoundCloud: one per genre+region (only supported regions)
+    # SoundCloud: collect unique genre+region pairs, run sequentially below
+    sc_jobs: list[tuple[str, str, int]] = []
     seen_sc: set[tuple[str, str]] = set()
     for q in quotas:
         genre, region = q["genre"], q["region"]
         if region in _SUPPORTED_REGIONS and (genre, region) not in seen_sc:
             seen_sc.add((genre, region))
-            tasks.append(asyncio.ensure_future(
-                fetch_sc_chart(genre, region, limit=q["count"])
-            ))
+            sc_jobs.append((genre, region, q["count"]))
 
-    if not tasks:
-        return []
+    # Run YT and SC concurrently, but SC charts are sequential among themselves
+    async def _fetch_sc_sequential() -> list[dict]:
+        all_tracks: list[dict] = []
+        for genre, region, count in sc_jobs:
+            try:
+                tracks = await fetch_sc_chart(genre, region, limit=count)
+                all_tracks.extend(tracks)
+            except Exception as e:
+                logger.warning("SC chart failed (%s/%s): %s", genre, region, e)
+        return all_tracks
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(
+        *yt_tasks,
+        _fetch_sc_sequential(),
+        return_exceptions=True,
+    )
 
     seen: set[str] = set()
     merged: list[dict] = []

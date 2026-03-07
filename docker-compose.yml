@@ -9,9 +9,11 @@ services:
       - ${GONIC_MUSIC_DIR:-/music}:${GONIC_MUSIC_DIR:-/music}
       - ./flavor.yml:/app/flavor.yml:ro
       - sonyaproxy-data:/app/data
+      - sc-cache:/tmp/sc-playwright-cache
     environment:
       - YTDLP_PATH=yt-dlp
       - DB_PATH=/app/data/sonyaproxy.db
 
 volumes:
   sonyaproxy-data:
+  sc-cache:
