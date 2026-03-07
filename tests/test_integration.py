@@ -16,7 +16,7 @@ VIRTUAL_TRACKS = [
 ]
 
 async def test_search3_includes_virtual_tracks():
-    import main
+    import app.main as main
     await main.startup()
 
     async def mock_forward(request):
@@ -25,9 +25,9 @@ async def test_search3_includes_virtual_tracks():
             media_type="application/xml",
         )
 
-    with patch("main.forward_to_gonic", mock_forward), \
-         patch("main.search_virtual", AsyncMock(return_value=VIRTUAL_TRACKS)), \
-         patch("musicbrainz.enrich_tracks", AsyncMock(side_effect=lambda t: t)):
+    with patch("app.main.forward_to_gonic", mock_forward), \
+         patch("app.main.search_virtual", AsyncMock(return_value=VIRTUAL_TRACKS)), \
+         patch("app.musicbrainz.enrich_tracks", AsyncMock(side_effect=lambda t: t)):
         transport = ASGITransport(app=main.app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/rest/search3?query=test&u=a&p=b&v=1.16.1&c=test")
@@ -37,13 +37,13 @@ async def test_search3_includes_virtual_tracks():
     assert b"Real Song" in r.content
 
 async def test_stream_virtual_triggers_download(tmp_path):
-    import main
+    import app.main as main
     await main.startup()
 
     mock_download = AsyncMock(return_value=str(tmp_path / "file.opus"))
     (tmp_path / "file.opus").write_bytes(b"fake audio")
     with patch.object(main.download_queue, "download", mock_download), \
-         patch("main._verify_client_auth", AsyncMock(return_value=True)):
+         patch("app.main._verify_client_auth", AsyncMock(return_value=True)):
         transport = ASGITransport(app=main.app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/rest/stream?id=virt_dQw4w9WgXcQ&u=a&p=b&v=1.16.1&c=test")

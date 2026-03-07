@@ -1,11 +1,10 @@
 import asyncio, json
 from typing import Any
-from normalizer import normalize
-from config import settings
+from app.normalizer import normalize
+from app.config import settings
 
 
 async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, Any]]:
-    """Поиск через yt-dlp для одного источника (ytsearch / scsearch)."""
     cmd = [
         settings.ytdlp_path,
         f"{prefix}{count}:{query}",
@@ -46,12 +45,10 @@ async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, 
 
 
 async def search_virtual(query: str, count: int = 10) -> list[dict[str, Any]]:
-    """Параллельный поиск на YouTube и SoundCloud с дедупликацией."""
     yt_task = asyncio.create_task(_search_source("ytsearch", query, count))
     sc_task = asyncio.create_task(_search_source("scsearch", query, count))
     yt_results, sc_results = await asyncio.gather(yt_task, sc_task)
 
-    # Дедупликация: YT первыми, SC — только если нет аналога из YT
     seen: set[str] = set()
     merged = []
     for track in yt_results:

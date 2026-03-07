@@ -1,12 +1,12 @@
 import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
-from config import settings
-from proxy import forward_to_gonic
-from index import TrackIndex
-from downloader import DownloadQueue
-from ytdlp import search_virtual
-from search import augment_search3
+from app.config import settings
+from app.proxy import forward_to_gonic
+from app.index import TrackIndex
+from app.downloader import DownloadQueue
+from app.ytdlp import search_virtual
+from app.search import augment_search3
 import httpx
 
 app = FastAPI(title="sonyaproxy")
@@ -25,7 +25,6 @@ _autopop_task: asyncio.Task | None = None
 async def startup():
     await track_index.init()
     await download_queue.init()
-    # Синк запускается в фоне, не блокирует старт
     asyncio.create_task(_initial_sync())
 
 
@@ -51,7 +50,7 @@ async def _sync_loop():
 
 async def _start_autopop():
     await asyncio.sleep(settings.autopop_startup_delay)
-    from autopop import autopop_loop
+    from app.autopop.loop import autopop_loop
     await autopop_loop(track_index, download_queue, settings.autopop_flavor_path)
 
 
@@ -86,7 +85,7 @@ async def handle_search3(request: Request, params: dict) -> Response:
 
     gonic_xml = gonic_resp.body.decode()
 
-    from musicbrainz import enrich_tracks
+    from app.musicbrainz import enrich_tracks
     virtual_tracks = await enrich_tracks(virtual_tracks)
 
     augmented_xml = await augment_search3(
@@ -118,7 +117,6 @@ async def _prefetch(vt: dict):
 
 
 async def _verify_client_auth(params: dict) -> bool:
-    """Verify client credentials against gonic via ping."""
     auth_params = {k: v for k, v in params.items() if k in ("u", "p", "t", "s", "v", "c", "f")}
     if "u" not in auth_params:
         return False
@@ -134,7 +132,6 @@ async def _verify_client_auth(params: dict) -> bool:
 
 
 async def handle_virtual_stream(request: Request, params: dict) -> Response:
-    # Verify client auth before serving virtual content
     if not await _verify_client_auth(params):
         return Response(
             content='<?xml version="1.0" encoding="UTF-8"?>'

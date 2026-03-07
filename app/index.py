@@ -1,7 +1,7 @@
 import httpx
 import xmltodict
-from db import init_db
-from normalizer import normalize
+from app.db import init_db
+from app.normalizer import normalize
 
 
 class TrackIndex:
@@ -30,7 +30,6 @@ class TrackIndex:
             return await cur.fetchone() is not None
 
     async def sync_from_gonic(self, gonic_url: str, gonic_user: str, gonic_pass: str):
-        """Скачать все треки из GONIC и обновить индекс."""
         params_base = {"u": gonic_user, "p": gonic_pass, "v": "1.16.1", "c": "sonyaproxy", "f": "xml"}
         async with httpx.AsyncClient() as client:
             offset = 0
@@ -52,7 +51,6 @@ class TrackIndex:
                         (song["@id"], song.get("@artist", ""), song.get("@album", ""),
                          song.get("@title", ""), key)
                     )
-                # один commit на страницу (500 треков) вместо 500 отдельных
                 await self._conn.commit()
                 if len(songs) < 500:
                     break

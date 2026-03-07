@@ -12,9 +12,9 @@ def test_settings_loads_from_env():
         "YTDLP_FORMAT": "bestaudio",
     }
     with patch.dict(os.environ, env, clear=True):
-        import config
-        importlib.reload(config)
-        s = config.settings
+        import app.config
+        importlib.reload(app.config)
+        s = app.config.settings
         assert s.gonic_url == "http://gonic:4533"
         assert s.gonic_user == "testuser"
         assert s.proxy_port == 4041

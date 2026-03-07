@@ -1,11 +1,10 @@
 import httpx
 from fastapi import Request
 from fastapi.responses import Response
-from config import settings
+from app.config import settings
 
 
 async def forward_to_gonic(request: Request) -> Response:
-    """Прозрачно проксировать запрос в GONIC."""
     path = request.url.path
     params = dict(request.query_params)
     body = await request.body()

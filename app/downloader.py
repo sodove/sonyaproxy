@@ -1,7 +1,7 @@
 import asyncio, re, httpx
 from pathlib import Path
-from db import init_db
-from config import settings
+from app.db import init_db
+from app.config import settings
 
 
 class DownloadQueue:
@@ -24,7 +24,6 @@ class DownloadQueue:
         return folder / f"{self._safe_path(title)}__{youtube_id}.%(ext)s"
 
     async def trigger_rescan(self):
-        """Trigger GONIC library rescan."""
         try:
             async with httpx.AsyncClient() as client:
                 await client.get(
@@ -38,7 +37,6 @@ class DownloadQueue:
         self, virt_id: str, youtube_url: str, artist: str, title: str,
         trigger_rescan: bool = True,
     ) -> str:
-        # Проверить done в БД
         async with self._conn.execute(
             "SELECT status, local_path FROM downloads WHERE id = ?", (virt_id,)
         ) as cur:
@@ -47,7 +45,6 @@ class DownloadQueue:
         if row and row["status"] == "done":
             return row["local_path"]
 
-        # Если уже качается — ждать Event
         if virt_id in self._events:
             await self._events[virt_id].wait()
             async with self._conn.execute(
@@ -56,7 +53,6 @@ class DownloadQueue:
                 row = await cur.fetchone()
             return row["local_path"]
 
-        # Начать скачивание
         event = asyncio.Event()
         self._events[virt_id] = event
 
@@ -83,7 +79,6 @@ class DownloadQueue:
             )
             await proc.communicate()
 
-            # Найти скачанный файл (ext может быть любым)
             folder = Path(out_template).parent
             youtube_id = virt_id.removeprefix("virt_")
             matches = list(folder.glob(f"*{youtube_id}*"))

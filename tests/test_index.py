@@ -1,5 +1,5 @@
 import pytest
-from index import TrackIndex
+from app.index import TrackIndex
 
 @pytest.fixture
 async def idx(tmp_path):

@@ -4,8 +4,7 @@ from unittest.mock import patch
 import httpx
 
 async def test_proxy_passes_through_ping():
-    """Проверить что /rest/ping проксируется в GONIC."""
-    from main import app
+    from app.main import app
 
     gonic_response = b'<?xml version="1.0"?><subsonic-response status="ok" version="1.16.1"/>'
 

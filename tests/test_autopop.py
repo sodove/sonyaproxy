@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from autopop import run_autopop_cycle, _detect_language, _apply_language_filter, _is_boost_day
-from flavor import FlavorConfig, ReleaseDayBoost
+from app.autopop.loop import run_autopop_cycle, _detect_language, _apply_language_filter, _is_boost_day
+from app.autopop.flavor import FlavorConfig, ReleaseDayBoost
 
 
 def _make_track(source_id, title, artist, source="yt", url=None):
@@ -17,11 +17,9 @@ def _make_track(source_id, title, artist, source="yt", url=None):
 
 
 async def test_run_autopop_cycle_skips_existing():
-    """Tracks already in the index are skipped (dedup by title only)."""
     index = AsyncMock()
-    # exists_normalized checks normalize(query) against stored keys
-    # index stores normalize(title), so we pass title only
     index.exists_normalized = AsyncMock(side_effect=lambda key: "existing" in key)
+    index.upsert = AsyncMock()
     queue = AsyncMock()
     queue.download = AsyncMock(return_value="/path/to/file.opus")
     queue.trigger_rescan = AsyncMock()
@@ -38,8 +36,8 @@ async def test_run_autopop_cycle_skips_existing():
         max_tracks_per_cycle=10,
     )
 
-    with patch("autopop.fetch_all_charts", return_value=candidates), \
-         patch("autopop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
+    with patch("app.autopop.loop.fetch_all_charts", return_value=candidates), \
+         patch("app.autopop.loop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
         count = await run_autopop_cycle(index, queue, flavor)
 
     assert count == 1
@@ -47,10 +45,7 @@ async def test_run_autopop_cycle_skips_existing():
 
 
 async def test_dedup_uses_title_only():
-    """Dedup key is title-only, matching index.upsert which stores normalize(title)."""
     index = AsyncMock()
-    # exists_normalized is called with raw title; it internally normalizes.
-    # "Cool Song" -> already exists; "Brand New" -> not found
     index.exists_normalized = AsyncMock(
         side_effect=lambda key: "Cool Song" in key
     )
@@ -71,20 +66,17 @@ async def test_dedup_uses_title_only():
         max_tracks_per_cycle=10,
     )
 
-    with patch("autopop.fetch_all_charts", return_value=candidates), \
-         patch("autopop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
+    with patch("app.autopop.loop.fetch_all_charts", return_value=candidates), \
+         patch("app.autopop.loop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
         count = await run_autopop_cycle(index, queue, flavor)
 
-    # "Cool Song" skipped (exists), "Brand New" downloaded
     assert count == 1
-    # exists_normalized was called with title, not "artist title"
     calls = [c.args[0] for c in index.exists_normalized.call_args_list]
     assert "Cool Song" in calls
     assert "Brand New" in calls
 
 
 async def test_upsert_called_after_download():
-    """After successful download, track is upserted into the index."""
     index = AsyncMock()
     index.exists_normalized = AsyncMock(return_value=False)
     index.upsert = AsyncMock()
@@ -101,8 +93,8 @@ async def test_upsert_called_after_download():
         max_tracks_per_cycle=10,
     )
 
-    with patch("autopop.fetch_all_charts", return_value=candidates), \
-         patch("autopop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
+    with patch("app.autopop.loop.fetch_all_charts", return_value=candidates), \
+         patch("app.autopop.loop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
         count = await run_autopop_cycle(index, queue, flavor)
 
     assert count == 1
@@ -115,7 +107,6 @@ async def test_upsert_called_after_download():
 
 
 async def test_run_autopop_cycle_respects_max_tracks():
-    """30 candidates but max=5 -> only 5 downloaded."""
     index = AsyncMock()
     index.exists_normalized = AsyncMock(return_value=False)
     index.upsert = AsyncMock()
@@ -132,8 +123,8 @@ async def test_run_autopop_cycle_respects_max_tracks():
         max_tracks_per_cycle=5,
     )
 
-    with patch("autopop.fetch_all_charts", return_value=candidates), \
-         patch("autopop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 10}]):
+    with patch("app.autopop.loop.fetch_all_charts", return_value=candidates), \
+         patch("app.autopop.loop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 10}]):
         count = await run_autopop_cycle(index, queue, flavor)
 
     assert count == 5
@@ -141,7 +132,6 @@ async def test_run_autopop_cycle_respects_max_tracks():
 
 
 async def test_language_filter():
-    """5 ru + 5 en, weights 0.5/0.5, max=6 -> 3+3."""
     ru_tracks = [_make_track(f"ru{i}", f"Песня {i}", "Артист") for i in range(5)]
     en_tracks = [_make_track(f"en{i}", f"Song {i}", "Artist") for i in range(5)]
     all_tracks = ru_tracks + en_tracks
@@ -164,7 +154,6 @@ def test_detect_language():
 
 
 async def test_autopop_cycle_handles_download_error():
-    """One download fails, others continue. Upsert not called for failed."""
     index = AsyncMock()
     index.exists_normalized = AsyncMock(return_value=False)
     index.upsert = AsyncMock()
@@ -191,24 +180,24 @@ async def test_autopop_cycle_handles_download_error():
         max_tracks_per_cycle=10,
     )
 
-    with patch("autopop.fetch_all_charts", return_value=candidates), \
-         patch("autopop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
+    with patch("app.autopop.loop.fetch_all_charts", return_value=candidates), \
+         patch("app.autopop.loop.compute_quotas", return_value=[{"genre": "electronic", "region": "US", "count": 5}]):
         count = await run_autopop_cycle(index, queue, flavor)
 
-    assert count == 2  # 3 attempted, 1 failed
+    assert count == 2
     assert queue.trigger_rescan.called
-    assert index.upsert.call_count == 2  # only successful downloads
+    assert index.upsert.call_count == 2
 
 
 def test_is_boost_day_friday():
     flavor = FlavorConfig(release_day_boost=ReleaseDayBoost(days=["friday"]))
-    with patch("autopop.datetime") as mock_dt:
+    with patch("app.autopop.loop.datetime") as mock_dt:
         mock_dt.now.return_value.strftime.return_value = "Friday"
         assert _is_boost_day(flavor) is True
 
 
 def test_is_boost_day_not_boost():
     flavor = FlavorConfig(release_day_boost=ReleaseDayBoost(days=["friday"]))
-    with patch("autopop.datetime") as mock_dt:
+    with patch("app.autopop.loop.datetime") as mock_dt:
         mock_dt.now.return_value.strftime.return_value = "Monday"
         assert _is_boost_day(flavor) is False

@@ -22,7 +22,6 @@ def _chart_url(genre: str, region: str) -> str | None:
 
 
 async def _scrape_sc_playlist(url: str) -> list[dict[str, Any]]:
-    """Scrape a SoundCloud chart playlist using Playwright."""
     try:
         from playwright.async_api import async_playwright
     except ImportError:
@@ -36,17 +35,14 @@ async def _scrape_sc_playlist(url: str) -> list[dict[str, Any]]:
             page = await browser.new_page()
             await page.goto(url, wait_until="networkidle", timeout=30000)
 
-            # Dismiss cookie banner if present
             try:
                 accept_btn = page.locator("button#onetrust-accept-btn-handler")
                 await accept_btn.click(timeout=3000)
             except Exception:
                 pass
 
-            # Wait for track list to render
             await page.wait_for_selector(".trackList__item", timeout=15000)
 
-            # Extract track data
             tracks = await page.evaluate("""
                 () => {
                     const items = document.querySelectorAll('.trackList__item');
@@ -84,10 +80,6 @@ async def _scrape_sc_playlist(url: str) -> list[dict[str, Any]]:
 async def fetch_sc_chart(
     genre: str, region: str, limit: int = 20
 ) -> list[dict[str, Any]]:
-    """Fetch SoundCloud chart tracks for genre+region.
-
-    Returns [] for unsupported regions (e.g. RU).
-    """
     url = _chart_url(genre, region)
     if not url:
         return []

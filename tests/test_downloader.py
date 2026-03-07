@@ -1,7 +1,7 @@
 import pytest, asyncio
 from pathlib import Path
 from unittest.mock import patch
-from downloader import DownloadQueue
+from app.downloader import DownloadQueue
 
 async def test_download_creates_file(tmp_path):
     q = DownloadQueue(
@@ -41,7 +41,6 @@ async def test_download_creates_file(tmp_path):
     assert Path(local_path).exists()
 
 async def test_concurrent_download_same_id(tmp_path):
-    """Два одновременных запроса одного трека — только одно скачивание."""
     q = DownloadQueue(
         db_path=str(tmp_path / "test.db"),
         music_dir=str(tmp_path / "music"),
@@ -71,11 +70,10 @@ async def test_concurrent_download_same_id(tmp_path):
             q.download("virt_abc", "https://yt.com/abc", "Artist", "Song"),
         )
 
-    assert download_count == 1  # Скачано только раз
+    assert download_count == 1
     assert results[0] == results[1]
 
 async def test_rescan_triggered_after_download(tmp_path):
-    from config import settings
     q = DownloadQueue(
         db_path=str(tmp_path / "test.db"),
         music_dir=str(tmp_path / "music"),

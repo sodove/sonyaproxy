@@ -1,16 +1,14 @@
 import json
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from ytmusic import (
+from app.sources.ytmusic import (
     fetch_ytmusic_chart,
     _extract_playlist_ids,
     _fetch_playlist_tracks,
-    _fetch_chart_browse,
 )
 
 
 def _make_browse_response(playlist_ids: list[str]) -> dict:
-    """Fake YT Music browse response with playlist browseIds."""
     items = []
     for pid in playlist_ids:
         items.append({
@@ -80,7 +78,7 @@ async def test_fetch_ytmusic_chart_full():
     async def mock_browse(region):
         return browse_data
 
-    with patch("ytmusic._fetch_chart_browse", side_effect=mock_browse), \
+    with patch("app.sources.ytmusic._fetch_chart_browse", side_effect=mock_browse), \
          patch("asyncio.create_subprocess_exec", _mock_exec_factory(ytdlp_output)):
         tracks = await fetch_ytmusic_chart("RU", limit=5)
 
@@ -92,6 +90,6 @@ async def test_fetch_ytmusic_chart_no_playlists():
     async def mock_browse(region):
         return {}
 
-    with patch("ytmusic._fetch_chart_browse", side_effect=mock_browse):
+    with patch("app.sources.ytmusic._fetch_chart_browse", side_effect=mock_browse):
         tracks = await fetch_ytmusic_chart("RU", limit=5)
     assert tracks == []

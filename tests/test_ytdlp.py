@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from ytdlp import search_virtual
+from app.ytdlp import search_virtual
 
 YT_OUTPUT = '{"id": "dQw4w9WgXcQ", "title": "Never Gonna Give You Up", "uploader": "Rick Astley", "duration": 213, "webpage_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}\n'
 SC_OUTPUT = '{"id": "sc_111", "title": "Never Gonna Give You Up (SC)", "uploader": "Rick Astley", "duration": 213, "webpage_url": "https://soundcloud.com/rickastley/never"}\n'
@@ -24,11 +24,10 @@ async def test_search_virtual_merges_yt_and_sc():
     with patch("asyncio.create_subprocess_exec", mock_exec):
         results = await search_virtual("never gonna give you up", count=5)
 
-    assert call_count == 2  # оба поиска запустились
+    assert call_count == 2
     ids = [r["id"] for r in results]
     assert "virt_yt_dQw4w9WgXcQ" in ids
     assert "virt_sc_sc_111" in ids
-    # Дубликат SC (тот же title+artist) должен быть удалён
     assert "virt_sc_sc_dup" not in ids
 
 async def test_search_virtual_yt_prefix():

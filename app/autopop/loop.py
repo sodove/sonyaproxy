@@ -3,11 +3,11 @@ import logging
 import re
 from datetime import datetime
 
-from flavor import FlavorConfig, load_flavor, compute_quotas
-from charts import fetch_all_charts
-from index import TrackIndex
-from downloader import DownloadQueue
-from normalizer import normalize
+from app.autopop.flavor import FlavorConfig, load_flavor, compute_quotas
+from app.autopop.charts import fetch_all_charts
+from app.index import TrackIndex
+from app.downloader import DownloadQueue
+from app.normalizer import normalize
 
 logger = logging.getLogger("sonyaproxy.autopop")
 
@@ -15,15 +15,12 @@ _CYRILLIC_RE = re.compile(r'[\u0400-\u04FF]')
 
 
 def _detect_language(text: str) -> str:
-    """Cyrillic chars present -> 'ru', else 'en'."""
     return "ru" if _CYRILLIC_RE.search(text) else "en"
 
 
 def _apply_language_filter(
     tracks: list[dict], language_weights: dict[str, float], max_count: int
 ) -> list[dict]:
-    """Distribute tracks across language buckets by weights."""
-    # Build buckets
     buckets: dict[str, list[dict]] = {}
     for t in tracks:
         lang = _detect_language(f"{t.get('artist', '')} {t.get('title', '')}")
@@ -31,7 +28,6 @@ def _apply_language_filter(
             lang = "other"
         buckets.setdefault(lang, []).append(t)
 
-    # Compute per-language limits
     weight_sum = sum(language_weights.values()) or 1.0
     result = []
     allocated = 0
@@ -54,15 +50,6 @@ async def run_autopop_cycle(
     download_queue: DownloadQueue,
     flavor: FlavorConfig,
 ) -> int:
-    """Single auto-populate cycle.
-
-    1. Compute quotas from flavor
-    2. Fetch chart tracks
-    3. Filter already-known tracks
-    4. Apply language filter
-    5. Download (without per-track rescan)
-    6. Trigger rescan once at end
-    """
     quotas = compute_quotas(flavor)
     if not quotas:
         return 0
@@ -70,8 +57,7 @@ async def run_autopop_cycle(
     candidates = await fetch_all_charts(quotas)
     logger.info("Fetched %d chart candidates", len(candidates))
 
-    # Filter out tracks already in index
-    # index.upsert stores normalize(title) as key, so check title only
+    # Filter out tracks already in index (title-only key to match index.upsert)
     new_tracks = []
     for t in candidates:
         if not await track_index.exists_normalized(t["title"]):
@@ -79,12 +65,10 @@ async def run_autopop_cycle(
 
     logger.info("%d new tracks after dedup", len(new_tracks))
 
-    # Apply language filter
     filtered = _apply_language_filter(
         new_tracks, flavor.languages, flavor.max_tracks_per_cycle
     )
 
-    # Download
     downloaded = 0
     for t in filtered[:flavor.max_tracks_per_cycle]:
         virt_id = f"virt_{t['source']}_{t['source_id']}"
@@ -114,7 +98,6 @@ async def run_autopop_cycle(
 
 
 def _is_boost_day(flavor: FlavorConfig) -> bool:
-    """Check if today is a release day boost day."""
     today = datetime.now().strftime("%A").lower()
     return today in flavor.release_day_boost.days
 
@@ -124,10 +107,6 @@ async def autopop_loop(
     download_queue: DownloadQueue,
     flavor_path: str,
 ):
-    """Background loop. Re-reads flavor.yml each cycle (hot-reload).
-
-    On boost days: multiply max_tracks_per_cycle and use shorter interval.
-    """
     while True:
         flavor = load_flavor(flavor_path)
         boost = _is_boost_day(flavor)

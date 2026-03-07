@@ -27,7 +27,6 @@ class FlavorConfig:
 
 
 def load_flavor(path: str = "flavor.yml") -> FlavorConfig:
-    """Load from YAML. Return defaults if file missing."""
     p = Path(path)
     if not p.exists():
         return FlavorConfig()
@@ -52,21 +51,14 @@ def load_flavor(path: str = "flavor.yml") -> FlavorConfig:
 
 
 def compute_quotas(flavor: FlavorConfig) -> list[dict]:
-    """Convert genre weights + regions into fetch tasks.
-
-    Distributes max_tracks_per_cycle across genres (by weight) and regions (evenly).
-    Returns: [{"genre": "electronic", "region": "RU", "count": 3}, ...]
-    """
     regions = flavor.chart_regions or ["US"]
     n_regions = len(regions)
     total = flavor.max_tracks_per_cycle
 
-    # Filter out "other" genre — we don't search for "other"
     genre_weights = {g: w for g, w in flavor.genres.items() if g != "other"}
     if not genre_weights:
         return []
 
-    # Normalize weights
     weight_sum = sum(genre_weights.values())
     quotas = []
     allocated = 0
@@ -78,7 +70,6 @@ def compute_quotas(flavor: FlavorConfig) -> list[dict]:
             continue
         allocated += genre_total
 
-        # Split evenly across regions
         per_region = genre_total // n_regions
         remainder = genre_total % n_regions
         for j, region in enumerate(regions):

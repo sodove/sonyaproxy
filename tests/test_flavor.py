@@ -2,7 +2,7 @@ import os
 import tempfile
 import pytest
 import yaml
-from flavor import FlavorConfig, ReleaseDayBoost, load_flavor, compute_quotas
+from app.autopop.flavor import FlavorConfig, ReleaseDayBoost, load_flavor, compute_quotas
 
 
 def test_load_flavor_defaults(tmp_path):
@@ -51,7 +51,7 @@ def test_compute_quotas_multi_region():
         max_tracks_per_cycle=10,
     )
     quotas = compute_quotas(flavor)
-    assert len(quotas) == 4  # 2 genres x 2 regions
+    assert len(quotas) == 4
     total = sum(q["count"] for q in quotas)
     assert total == 10
     regions = {q["region"] for q in quotas}
@@ -67,7 +67,7 @@ def test_compute_quotas_rounding():
     quotas = compute_quotas(flavor)
     total = sum(q["count"] for q in quotas)
     assert total <= flavor.max_tracks_per_cycle
-    assert total == 10  # last genre gets remainder
+    assert total == 10
 
 
 def test_release_day_boost_defaults():
@@ -107,7 +107,6 @@ def test_release_day_boost_missing_in_yaml(tmp_path):
     p = tmp_path / "flavor.yml"
     p.write_text(yaml.dump(cfg), encoding="utf-8")
     flavor = load_flavor(str(p))
-    # Should use defaults when not in YAML
     assert flavor.release_day_boost.days == ["friday"]
     assert flavor.release_day_boost.track_multiplier == 2.0
 

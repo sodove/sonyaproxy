@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from sc_charts import fetch_sc_chart, _chart_url, _SUPPORTED_REGIONS
+from app.sources.sc_charts import fetch_sc_chart, _chart_url, _SUPPORTED_REGIONS
 
 
 def test_chart_url_supported():
@@ -33,7 +33,7 @@ async def test_fetch_sc_chart_supported():
         {"url": "https://soundcloud.com/artist/track2", "title": "Track 2",
          "artist": "Producer X", "duration": 0, "source_id": "track2", "source": "sc"},
     ]
-    with patch("sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=fake_tracks):
+    with patch("app.sources.sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=fake_tracks):
         result = await fetch_sc_chart("electronic", "US", limit=5)
     assert len(result) == 2
     assert result[0]["source"] == "sc"
@@ -51,12 +51,12 @@ async def test_fetch_sc_chart_limit():
          "artist": "A", "duration": 0, "source_id": f"t{i}", "source": "sc"}
         for i in range(10)
     ]
-    with patch("sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=fake_tracks):
+    with patch("app.sources.sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=fake_tracks):
         result = await fetch_sc_chart("electronic", "US", limit=3)
     assert len(result) == 3
 
 
 async def test_fetch_sc_chart_scrape_failure():
-    with patch("sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=[]):
+    with patch("app.sources.sc_charts._scrape_sc_playlist", new_callable=AsyncMock, return_value=[]):
         result = await fetch_sc_chart("electronic", "US", limit=5)
     assert result == []

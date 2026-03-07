@@ -1,9 +1,8 @@
 import xmltodict
-from index import TrackIndex
+from app.index import TrackIndex
 
 
 def _virtual_to_song_dict(vt: dict) -> dict:
-    """Конвертировать виртуальный трек в формат Subsonic song."""
     return {
         "@id": vt["id"],
         "@title": vt["title"],
@@ -23,7 +22,6 @@ async def augment_search3(
     virtual_tracks: list[dict],
     index: TrackIndex,
 ) -> str:
-    """Добавить виртуальные треки в XML ответ search3."""
     data = xmltodict.parse(gonic_xml)
     resp = data["subsonic-response"]
     sr3 = resp.setdefault("searchResult3", {})
@@ -32,7 +30,6 @@ async def augment_search3(
     if isinstance(existing_songs, dict):
         existing_songs = [existing_songs]
 
-    # Фильтровать виртуальные треки через индекс по title
     filtered_virtuals = []
     for vt in virtual_tracks:
         is_dup = await index.exists_normalized(vt["title"])

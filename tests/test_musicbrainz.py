@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from musicbrainz import enrich_track
+from app.musicbrainz import enrich_track
 
 MOCK_MB_RESPONSE = {
     "recording-list": [{

@@ -2,30 +2,23 @@ import asyncio
 import logging
 from typing import Any
 
-from normalizer import normalize
-from ytmusic import fetch_ytmusic_chart
-from sc_charts import fetch_sc_chart, _SUPPORTED_REGIONS
+from app.normalizer import normalize
+from app.sources.ytmusic import fetch_ytmusic_chart
+from app.sources.sc_charts import fetch_sc_chart, _SUPPORTED_REGIONS
 
 logger = logging.getLogger("sonyaproxy.charts")
 
 
 async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
-    """Fetch charts from YT Music + SoundCloud, merge and dedup.
-
-    - YT Music: one chart per unique region (returns trending for that region)
-    - SoundCloud: one chart per genre+region (only US/UK)
-    - Dedup by normalize(artist + title)
-    - return_exceptions=True so one source failing doesn't break the other
-    """
     tasks: list[asyncio.Task] = []
 
     # YT Music: one request per unique region
-    seen_regions: set[str] = set()
     total_per_region: dict[str, int] = {}
     for q in quotas:
         region = q["region"]
         total_per_region[region] = total_per_region.get(region, 0) + q["count"]
 
+    seen_regions: set[str] = set()
     for region, count in total_per_region.items():
         if region not in seen_regions:
             seen_regions.add(region)
@@ -48,7 +41,6 @@ async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Merge + dedup
     seen: set[str] = set()
     merged: list[dict] = []
     for batch in results:

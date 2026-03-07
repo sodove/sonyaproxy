@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from index import TrackIndex
+from app.index import TrackIndex
 
 MOCK_SEARCH3_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <subsonic-response status="ok" version="1.16.1">

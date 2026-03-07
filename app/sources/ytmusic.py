@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from config import settings
+from app.config import settings
 
 _YTMUSIC_API = "https://music.youtube.com/youtubei/v1/browse"
 _YTMUSIC_CONTEXT = {
@@ -16,7 +16,6 @@ _YTMUSIC_CONTEXT = {
 
 
 async def _fetch_chart_browse(region: str) -> dict:
-    """POST to YT Music browse API for charts in a region."""
     payload = {
         "browseId": "FEmusic_charts",
         "context": _YTMUSIC_CONTEXT,
@@ -40,7 +39,6 @@ async def _fetch_chart_browse(region: str) -> dict:
 
 
 def _extract_playlist_ids(data: dict) -> list[str]:
-    """Walk the browse response to find chart playlist browseIds (VL...)."""
     ids = []
     _walk_for_playlists(data, ids)
     return ids
@@ -59,8 +57,6 @@ def _walk_for_playlists(obj: Any, result: list[str]):
 
 
 async def _fetch_playlist_tracks(playlist_id: str, limit: int) -> list[dict]:
-    """Use yt-dlp --flat-playlist to get tracks from a YouTube playlist."""
-    # Strip VL prefix to get the real playlist ID
     yt_playlist_id = playlist_id[2:] if playlist_id.startswith("VL") else playlist_id
     url = f"https://www.youtube.com/playlist?list={yt_playlist_id}"
 
@@ -103,15 +99,8 @@ async def _fetch_playlist_tracks(playlist_id: str, limit: int) -> list[dict]:
 
 
 async def fetch_ytmusic_chart(region: str, limit: int = 20) -> list[dict]:
-    """Fetch trending tracks from YT Music charts for a region.
-
-    1. Browse FEmusic_charts for region
-    2. Extract first playlist ID
-    3. Fetch tracks via yt-dlp
-    """
     data = await _fetch_chart_browse(region)
     playlist_ids = _extract_playlist_ids(data)
     if not playlist_ids:
         return []
-    # Use first chart playlist (usually "Top songs" / "Trending")
     return await _fetch_playlist_tracks(playlist_ids[0], limit)
