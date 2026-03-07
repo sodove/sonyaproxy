@@ -33,7 +33,7 @@ async def _scrape_sc_playlist(url: str) -> list[dict[str, Any]]:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            await page.goto(url, wait_until="networkidle", timeout=45000)
+            await page.goto(url, wait_until="networkidle", timeout=180000)
 
             try:
                 accept_btn = page.locator("button#onetrust-accept-btn-handler")
