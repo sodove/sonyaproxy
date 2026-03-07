@@ -15,6 +15,7 @@ async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, 
         "--flat-playlist",
         "--print", "%()j",
         "--no-warnings",
+        "--socket-timeout", "10",
     ]
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -24,7 +25,11 @@ async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, 
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_SUBPROCESS_TIMEOUT)
     except asyncio.TimeoutError:
-        proc.kill()
+        try:
+            proc.kill()
+            await proc.wait()
+        except Exception:
+            pass
         logger.warning("%s search timed out after %ds", prefix, _SUBPROCESS_TIMEOUT)
         return []
 

@@ -1,8 +1,13 @@
 import asyncio
+import logging
 from typing import Any
 import musicbrainzngs
 
+logger = logging.getLogger("sonyaproxy.musicbrainz")
+
 musicbrainzngs.set_useragent("sonyaproxy", "0.1", "https://github.com/sonyaproxy")
+
+_ENRICH_TIMEOUT = 5
 
 
 def _search_sync(artist: str, title: str) -> dict | None:
@@ -25,9 +30,16 @@ def _search_sync(artist: str, title: str) -> dict | None:
 
 
 async def enrich_track(track: dict[str, Any]) -> dict[str, Any]:
-    mb_data = await asyncio.to_thread(
-        _search_sync, track.get("artist", ""), track.get("title", "")
-    )
+    try:
+        mb_data = await asyncio.wait_for(
+            asyncio.to_thread(
+                _search_sync, track.get("artist", ""), track.get("title", "")
+            ),
+            timeout=_ENRICH_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("MusicBrainz timeout for %s - %s", track.get("artist"), track.get("title"))
+        return track
     if mb_data:
         enriched = dict(track)
         if mb_data.get("album"):
