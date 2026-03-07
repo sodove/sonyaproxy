@@ -1,10 +1,15 @@
 import asyncio
 import json
+import logging
 from typing import Any
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger("sonyaproxy.ytmusic")
+
+_SUBPROCESS_TIMEOUT = 30
 
 _YTMUSIC_API = "https://music.youtube.com/youtubei/v1/browse"
 _YTMUSIC_CONTEXT = {
@@ -73,7 +78,12 @@ async def _fetch_playlist_tracks(playlist_id: str, limit: int) -> list[dict]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    stdout, _ = await proc.communicate()
+    try:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_SUBPROCESS_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        logger.warning("yt-dlp playlist fetch timed out after %ds", _SUBPROCESS_TIMEOUT)
+        return []
 
     tracks = []
     for line in stdout.decode().splitlines():

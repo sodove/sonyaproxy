@@ -1,7 +1,11 @@
-import asyncio, json
+import asyncio, json, logging
 from typing import Any
 from app.normalizer import normalize
 from app.config import settings
+
+logger = logging.getLogger("sonyaproxy.ytdlp")
+
+_SUBPROCESS_TIMEOUT = 15
 
 
 async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, Any]]:
@@ -17,7 +21,12 @@ async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, 
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    stdout, _ = await proc.communicate()
+    try:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_SUBPROCESS_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        logger.warning("%s search timed out after %ds", prefix, _SUBPROCESS_TIMEOUT)
+        return []
 
     source = "yt" if prefix.startswith("yt") else "sc"
     results = []
@@ -47,20 +56,18 @@ async def _search_source(prefix: str, query: str, count: int) -> list[dict[str, 
 async def search_virtual(query: str, count: int = 10) -> list[dict[str, Any]]:
     yt_task = asyncio.create_task(_search_source("ytsearch", query, count))
     sc_task = asyncio.create_task(_search_source("scsearch", query, count))
-    yt_results, sc_results = await asyncio.gather(yt_task, sc_task)
+    results = await asyncio.gather(yt_task, sc_task, return_exceptions=True)
 
     seen: set[str] = set()
     merged = []
-    for track in yt_results:
-        key = normalize(f"{track['artist']} {track['title']}")
-        if key not in seen:
-            seen.add(key)
-            merged.append(track)
-
-    for track in sc_results:
-        key = normalize(f"{track['artist']} {track['title']}")
-        if key not in seen:
-            seen.add(key)
-            merged.append(track)
+    for batch in results:
+        if isinstance(batch, BaseException):
+            logger.warning("Search source failed: %s", batch)
+            continue
+        for track in batch:
+            key = normalize(f"{track['artist']} {track['title']}")
+            if key not in seen:
+                seen.add(key)
+                merged.append(track)
 
     return merged
