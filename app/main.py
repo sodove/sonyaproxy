@@ -130,7 +130,10 @@ async def on_startup():
     _sync_task = asyncio.create_task(_sync_loop())
     asyncio.create_task(_ytdlp_update_loop())
     if settings.autopop_enabled:
+        logger.info("Autopop is ENABLED, starting background task (delay=%ds)", settings.autopop_startup_delay)
         _autopop_task = asyncio.create_task(_start_autopop())
+    else:
+        logger.info("Autopop is DISABLED (set AUTOPOP_ENABLED=true to enable)")
     _bot_task = asyncio.create_task(_start_bot())
 
 

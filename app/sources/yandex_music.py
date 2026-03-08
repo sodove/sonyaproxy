@@ -74,7 +74,20 @@ async def download_yandex(
         filename = f"{_safe(real_artist)} - {_safe(real_title)}__ym_{track_id}.mp3"
         filepath = output_dir / filename
 
-        await track.download_async(str(filepath), codec="mp3", bitrate_in_kbps=320)
+        # Download with retry (YM CDN drops connections sometimes)
+        last_err = None
+        for attempt in range(3):
+            try:
+                await track.download_async(str(filepath), codec="mp3", bitrate_in_kbps=320)
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                logger.warning("YM download attempt %d/3 failed for %s: %s", attempt + 1, track_id, e)
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+        if last_err:
+            raise last_err
 
         # Write ID3 tags via ffmpeg
         tagged = str(filepath) + ".tagged.mp3"
