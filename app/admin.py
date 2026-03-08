@@ -13,18 +13,18 @@ _ADMIN_HTML = """<!DOCTYPE html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>sonyaproxy admin</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:600px;margin:0 auto}
-h1{color:#e94560;margin-bottom:20px;font-size:1.5em}
-h2{color:#0f3460;background:#e94560;padding:8px 12px;border-radius:6px;margin:20px 0 10px;font-size:1em}
-.card{background:#16213e;border-radius:8px;padding:16px;margin-bottom:12px}
-label{display:block;font-size:.85em;color:#888;margin-bottom:4px}
-input[type=text],input[type=password]{width:100%;padding:8px;border:1px solid #333;border-radius:4px;background:#0f3460;color:#e0e0e0;font-family:monospace;font-size:.9em}
-button{background:#e94560;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;margin-top:8px;font-size:.9em}
-button:hover{background:#c73e54}
-.status{font-size:.85em;color:#888;margin-top:4px}
-.ok{color:#4ecca3}.err{color:#e94560}
-.mask{cursor:pointer;user-select:none}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:600px;margin:0 auto}}
+h1{{color:#e94560;margin-bottom:20px;font-size:1.5em}}
+h2{{color:#0f3460;background:#e94560;padding:8px 12px;border-radius:6px;margin:20px 0 10px;font-size:1em}}
+.card{{background:#16213e;border-radius:8px;padding:16px;margin-bottom:12px}}
+label{{display:block;font-size:.85em;color:#888;margin-bottom:4px}}
+input[type=text],input[type=password]{{width:100%;padding:8px;border:1px solid #333;border-radius:4px;background:#0f3460;color:#e0e0e0;font-family:monospace;font-size:.9em}}
+button{{background:#e94560;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;margin-top:8px;font-size:.9em}}
+button:hover{{background:#c73e54}}
+.status{{font-size:.85em;color:#888;margin-top:4px}}
+.ok{{color:#4ecca3}}.err{{color:#e94560}}
+.mask{{cursor:pointer;user-select:none}}
 </style>
 </head><body>
 <h1>sonyaproxy</h1>
