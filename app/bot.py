@@ -112,7 +112,7 @@ async def cmd_logout(message: Message):
 
 @router.message(Command("status"))
 async def cmd_status(message: Message):
-    if not _is_authorized(message.from_user.id):
+    if not await _is_authorized(message.from_user.id):
         await message.answer("Please /start and authenticate first.")
         return
 
@@ -142,7 +142,7 @@ async def cmd_status(message: Message):
 
 @router.message(F.text)
 async def handle_text(message: Message):
-    if not _is_authorized(message.from_user.id):
+    if not await _is_authorized(message.from_user.id):
         await message.answer("Please /start and authenticate first.")
         return
 
