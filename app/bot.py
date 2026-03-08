@@ -25,12 +25,15 @@ class AuthStates(StatesGroup):
     waiting_password = State()
 
 
-def _is_authorized(user_id: int, _authorized: dict[int, bool] = {}) -> bool:
-    return _authorized.get(user_id, False)
+_authorized_users: dict[int, bool] = {}
 
 
-def _set_authorized(user_id: int, value: bool, _authorized: dict[int, bool] = {}):
-    _authorized[user_id] = value
+def _is_authorized(user_id: int) -> bool:
+    return _authorized_users.get(user_id, False)
+
+
+def _set_authorized(user_id: int, value: bool):
+    _authorized_users[user_id] = value
 
 
 async def _verify_gonic_auth(username: str, password: str) -> bool:
