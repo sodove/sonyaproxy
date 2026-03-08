@@ -25,15 +25,17 @@ class AuthStates(StatesGroup):
     waiting_password = State()
 
 
-_authorized_users: dict[int, bool] = {}
+async def _is_authorized(user_id: int) -> bool:
+    from app.main import download_queue
+    from app.db import get_setting
+    val = await get_setting(download_queue._conn, f"tg_auth_{user_id}")
+    return val == "1"
 
 
-def _is_authorized(user_id: int) -> bool:
-    return _authorized_users.get(user_id, False)
-
-
-def _set_authorized(user_id: int, value: bool):
-    _authorized_users[user_id] = value
+async def _set_authorized(user_id: int, value: bool):
+    from app.main import download_queue
+    from app.db import set_setting
+    await set_setting(download_queue._conn, f"tg_auth_{user_id}", "1" if value else "0")
 
 
 async def _verify_gonic_auth(username: str, password: str) -> bool:
@@ -54,7 +56,7 @@ async def _verify_gonic_auth(username: str, password: str) -> bool:
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    if _is_authorized(message.from_user.id):
+    if await _is_authorized(message.from_user.id):
         await message.answer(
             "sonyaproxy bot\n\n"
             "Send me:\n"
@@ -90,7 +92,7 @@ async def auth_password(message: Message, state: FSMContext):
         pass
 
     if await _verify_gonic_auth(username, password):
-        _set_authorized(message.from_user.id, True)
+        await _set_authorized(message.from_user.id, True)
         await message.answer("Authorized! Send me a search query or URL.")
         logger.info("Bot: user %s authorized as %s", message.from_user.id, username)
     else:
@@ -102,7 +104,7 @@ async def auth_password(message: Message, state: FSMContext):
 
 @router.message(Command("logout"))
 async def cmd_logout(message: Message):
-    _set_authorized(message.from_user.id, False)
+    await _set_authorized(message.from_user.id, False)
     await message.answer("Logged out. /start to re-authenticate.")
 
 
@@ -217,7 +219,7 @@ async def callback_download(callback: CallbackQuery):
     user_id = int(parts[1])
     idx = int(parts[2])
 
-    if not _is_authorized(user_id):
+    if not await _is_authorized(user_id):
         await callback.answer("Not authorized")
         return
 
