@@ -341,10 +341,24 @@ async def _handle_url(message: Message, url: str):
         await status_msg.edit_text(f"Error: {e}")
 
 
+def _make_dispatcher() -> Dispatcher:
+    dp = Dispatcher()
+    new_router = Router()
+    # Re-register all handlers on a fresh router
+    new_router.message.register(cmd_start, Command("start"))
+    new_router.message.register(auth_username, AuthStates.waiting_username)
+    new_router.message.register(auth_password, AuthStates.waiting_password)
+    new_router.message.register(cmd_logout, Command("logout"))
+    new_router.message.register(cmd_status, Command("status"))
+    new_router.message.register(handle_text, F.text)
+    new_router.callback_query.register(callback_download, F.data.startswith("dl:"))
+    dp.include_router(new_router)
+    return dp
+
+
 async def start_bot(token: str) -> tuple[Bot, Dispatcher]:
     bot = Bot(token=token)
-    dp = Dispatcher()
-    dp.include_router(router)
+    dp = _make_dispatcher()
     logger.info("Telegram bot starting polling...")
     return bot, dp
 

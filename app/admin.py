@@ -170,9 +170,7 @@ async def save_settings(request: Request):
         except Exception:
             pass
 
-    return RedirectResponse(url="/admin/?u=" + dict(request.query_params).get("u", "admin") +
-                           "&p=" + dict(request.query_params).get("p", ""),
-                           status_code=303)
+    return RedirectResponse(url="/admin/", status_code=303)
 
 
 @router.get("/status")
