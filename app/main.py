@@ -89,11 +89,13 @@ async def on_startup():
 async def subsonic_handler(request: Request, path: str) -> Response:
     params = dict(request.query_params)
 
-    if path == "stream" and params.get("id", "").startswith("virt_"):
+    if path in ("stream", "stream.view") and params.get("id", "").startswith("virt_"):
         return await handle_virtual_stream(request, params)
 
-    if path == "search3":
-        return await handle_search3(request, params)
+    if path in ("search3", "search3.view"):
+        query = params.get("query", "").strip().strip('"')
+        if query:
+            return await handle_search3(request, params)
 
     return await forward_to_gonic(request)
 
