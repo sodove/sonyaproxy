@@ -19,5 +19,7 @@ class Settings:
     autopop_flavor_path: str = os.getenv("AUTOPOP_FLAVOR_PATH", "flavor.yml")
     autopop_startup_delay: int = int(os.getenv("AUTOPOP_STARTUP_DELAY", "60"))
     db_path: str = os.getenv("DB_PATH", "sonyaproxy.db")
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    yandex_music_token: str = os.getenv("YANDEX_MUSIC_TOKEN", "")
 
 settings = Settings()

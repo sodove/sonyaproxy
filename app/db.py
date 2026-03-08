@@ -26,6 +26,15 @@ CREATE_INDEX_ON_NORMALIZED = """
 CREATE INDEX IF NOT EXISTS idx_track_normalized ON track_index(normalized_key);
 """
 
+CREATE_SETTINGS = """
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+
 async def init_db(path: str = "sonyaproxy.db") -> aiosqlite.Connection:
     conn = await aiosqlite.connect(path)
     conn.row_factory = aiosqlite.Row
@@ -34,5 +43,22 @@ async def init_db(path: str = "sonyaproxy.db") -> aiosqlite.Connection:
     await conn.execute(CREATE_TRACK_INDEX)
     await conn.execute(CREATE_DOWNLOADS)
     await conn.execute(CREATE_INDEX_ON_NORMALIZED)
+    await conn.execute(CREATE_SETTINGS)
     await conn.commit()
     return conn
+
+
+async def get_setting(conn: aiosqlite.Connection, key: str) -> str | None:
+    async with conn.execute(
+        "SELECT value FROM settings WHERE key = ?", (key,)
+    ) as cur:
+        row = await cur.fetchone()
+    return row["value"] if row else None
+
+
+async def set_setting(conn: aiosqlite.Connection, key: str, value: str):
+    await conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        (key, value),
+    )
+    await conn.commit()

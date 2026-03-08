@@ -8,11 +8,14 @@ from app.index import TrackIndex
 from app.downloader import DownloadQueue
 from app.ytdlp import search_virtual
 from app.search import augment_search3
+from app.db import get_setting
+from app.admin import router as admin_router
 import httpx
 
 logger = logging.getLogger("sonyaproxy")
 
 app = FastAPI(title="sonyaproxy")
+app.include_router(admin_router)
 
 track_index = TrackIndex(db_path=settings.db_path)
 download_queue = DownloadQueue(
@@ -23,6 +26,9 @@ download_queue = DownloadQueue(
 
 _sync_task: asyncio.Task | None = None
 _autopop_task: asyncio.Task | None = None
+_bot_task: asyncio.Task | None = None
+_bot_instance = None
+_dp_instance = None
 
 
 async def startup():
@@ -75,14 +81,51 @@ async def _ytdlp_update_loop():
             logger.warning("yt-dlp update failed", exc_info=True)
 
 
+async def _start_bot():
+    global _bot_instance, _dp_instance
+    conn = download_queue._conn
+    token = await get_setting(conn, "telegram_bot_token")
+    if not token:
+        token = settings.telegram_bot_token
+    if not token:
+        logger.info("No Telegram bot token, skipping bot startup")
+        return
+
+    try:
+        from app.bot import start_bot, run_polling
+        _bot_instance, _dp_instance = await start_bot(token)
+        await run_polling(_bot_instance, _dp_instance)
+    except Exception:
+        logger.exception("Telegram bot failed")
+
+
+async def restart_bot():
+    global _bot_task, _bot_instance, _dp_instance
+    if _bot_instance:
+        try:
+            await _dp_instance.stop_polling()
+            await _bot_instance.session.close()
+        except Exception:
+            pass
+        _bot_instance = None
+        _dp_instance = None
+
+    if _bot_task and not _bot_task.done():
+        _bot_task.cancel()
+
+    _bot_task = asyncio.create_task(_start_bot())
+    logger.info("Telegram bot restarted")
+
+
 @app.on_event("startup")
 async def on_startup():
-    global _sync_task, _autopop_task
+    global _sync_task, _autopop_task, _bot_task
     await startup()
     _sync_task = asyncio.create_task(_sync_loop())
     asyncio.create_task(_ytdlp_update_loop())
     if settings.autopop_enabled:
         _autopop_task = asyncio.create_task(_start_autopop())
+    _bot_task = asyncio.create_task(_start_bot())
 
 
 @app.api_route("/rest/{path:path}", methods=["GET", "POST"])
@@ -124,18 +167,6 @@ async def handle_search3(request: Request, params: dict) -> Response:
     )
 
 
-async def _prefetch(vt: dict):
-    try:
-        await download_queue.download(
-            virt_id=vt["id"],
-            youtube_url=vt["youtube_url"],
-            artist=vt["artist"],
-            title=vt["title"],
-        )
-    except Exception:
-        pass
-
-
 async def _verify_client_auth(params: dict) -> bool:
     auth_params = {k: v for k, v in params.items() if k in ("u", "p", "t", "s", "v", "c", "f")}
     if "u" not in auth_params:
@@ -163,14 +194,35 @@ async def handle_virtual_stream(request: Request, params: dict) -> Response:
         )
 
     virt_id = params["id"]
-    youtube_id = virt_id.removeprefix("virt_")
 
-    local_path = await download_queue.download(
-        virt_id=virt_id,
-        youtube_url=f"https://www.youtube.com/watch?v={youtube_id}",
-        artist="Unknown",
-        title=youtube_id,
-    )
+    # Determine URL based on prefix
+    if virt_id.startswith("virt_ym_"):
+        # Yandex Music — download via API
+        ym_track_id = int(virt_id.removeprefix("virt_ym_"))
+        conn = download_queue._conn
+        ym_token = await get_setting(conn, "yandex_token")
+        if not ym_token:
+            return Response(content="Yandex Music token not configured", status_code=503)
+
+        from app.sources.yandex_music import download_yandex
+        from pathlib import Path
+        output_dir = Path(settings.gonic_music_dir) / "Virtual Downloads" / "Yandex Music" / "Singles"
+        local_path = await download_yandex(ym_token, ym_track_id, "Unknown", str(ym_track_id), output_dir)
+        if not local_path:
+            return Response(content="Download failed", status_code=502)
+        await download_queue.trigger_rescan()
+    elif virt_id.startswith("virt_sc_"):
+        sc_id = virt_id.removeprefix("virt_sc_")
+        url = f"https://api.soundcloud.com/tracks/{sc_id}"
+        local_path = await download_queue.download(
+            virt_id=virt_id, youtube_url=url, artist="Unknown", title=sc_id,
+        )
+    else:
+        youtube_id = virt_id.removeprefix("virt_yt_")
+        url = f"https://www.youtube.com/watch?v={youtube_id}"
+        local_path = await download_queue.download(
+            virt_id=virt_id, youtube_url=url, artist="Unknown", title=youtube_id,
+        )
 
     from pathlib import Path
     ext = Path(local_path).suffix.lstrip(".")
@@ -180,5 +232,5 @@ async def handle_virtual_stream(request: Request, params: dict) -> Response:
     return FileResponse(
         path=local_path,
         media_type=media_type,
-        filename=f"{youtube_id}.{ext}",
+        filename=Path(local_path).name,
     )
