@@ -266,12 +266,13 @@ async def _download_track(track: dict) -> str | None:
 
         from app.sources.yandex_music import download_yandex
         output_dir = Path(settings.gonic_music_dir) / "Virtual Downloads" / _safe(track["artist"]) / "Singles"
-        path = await download_yandex(
+        result = await download_yandex(
             ym_token, track["ym_track_id"], track["artist"], track["title"], output_dir
         )
-        if path:
+        if result:
             await download_queue.trigger_rescan()
-        return path
+            return result["path"]
+        return None
     else:
         # YT/SC download via yt-dlp
         url = track.get("youtube_url") or track.get("url", "")
@@ -324,10 +325,10 @@ async def _handle_url(message: Message, url: str):
 
             from app.sources.yandex_music import download_yandex
             output_dir = Path(settings.gonic_music_dir) / "Virtual Downloads" / "Yandex Music" / "Singles"
-            path = await download_yandex(ym_token, track_id, "Unknown", str(track_id), output_dir)
-            if path:
+            result = await download_yandex(ym_token, track_id, output_dir=output_dir)
+            if result:
                 await download_queue.trigger_rescan()
-                await status_msg.edit_text(f"Downloaded from Yandex Music!")
+                await status_msg.edit_text(f"Downloaded: {result['artist']} — {result['title']}")
             else:
                 await status_msg.edit_text("YM download failed.")
         else:

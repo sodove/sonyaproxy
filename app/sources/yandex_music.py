@@ -45,11 +45,13 @@ async def search_yandex(token: str, query: str, limit: int = 10) -> list[dict[st
 
 
 async def download_yandex(
-    token: str, track_id: int, artist: str, title: str, output_dir: Path
-) -> str | None:
+    token: str, track_id: int, artist: str = "", title: str = "", output_dir: Path | None = None
+) -> dict | None:
+    """Download track from YM. Returns {"path": str, "artist": str, "title": str, "album": str} or None."""
     if not token:
         return None
     try:
+        import asyncio, re
         from yandex_music import ClientAsync
         client = await ClientAsync(token).init()
 
@@ -59,16 +61,47 @@ async def download_yandex(
             return None
 
         track = track_list[0]
+
+        # Use metadata from YM API
+        real_artist = ", ".join(a.name for a in (track.artists or [])) or artist or "Unknown"
+        real_title = track.title or title or str(track_id)
+        real_album = track.albums[0].title if track.albums else "Yandex Music"
+
+        if output_dir is None:
+            output_dir = Path("/music/Virtual Downloads") / _safe(real_artist) / "Singles"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        import re
-        safe = lambda s: re.sub(r'[<>:"/\\|?*]', '_', s)
-        filename = f"{safe(artist)} - {safe(title)}__ym_{track_id}.mp3"
+        filename = f"{_safe(real_artist)} - {_safe(real_title)}__ym_{track_id}.mp3"
         filepath = output_dir / filename
 
         await track.download_async(str(filepath), codec="mp3", bitrate_in_kbps=320)
-        logger.info("YM downloaded: %s -> %s", track_id, filepath)
-        return str(filepath)
+
+        # Write ID3 tags via ffmpeg
+        tagged = str(filepath) + ".tagged.mp3"
+        tag_cmd = [
+            "ffmpeg", "-y", "-i", str(filepath),
+            "-c", "copy",
+            "-metadata", f"artist={real_artist}",
+            "-metadata", f"title={real_title}",
+            "-metadata", f"album={real_album}",
+            tagged,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *tag_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        if proc.returncode == 0:
+            Path(tagged).replace(filepath)
+
+        logger.info("YM downloaded: %s - %s -> %s", real_artist, real_title, filepath)
+        return {"path": str(filepath), "artist": real_artist, "title": real_title, "album": real_album}
     except Exception:
         logger.warning("Yandex Music download failed for %s", track_id, exc_info=True)
         return None
+
+
+def _safe(s: str) -> str:
+    import re
+    return re.sub(r'[<>:"/\\|?*]', '_', s)

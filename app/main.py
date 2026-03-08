@@ -207,9 +207,10 @@ async def handle_virtual_stream(request: Request, params: dict) -> Response:
         from app.sources.yandex_music import download_yandex
         from pathlib import Path
         output_dir = Path(settings.gonic_music_dir) / "Virtual Downloads" / "Yandex Music" / "Singles"
-        local_path = await download_yandex(ym_token, ym_track_id, "Unknown", str(ym_track_id), output_dir)
-        if not local_path:
+        result = await download_yandex(ym_token, ym_track_id, output_dir=output_dir)
+        if not result:
             return Response(content="Download failed", status_code=502)
+        local_path = result["path"]
         await download_queue.trigger_rescan()
     elif virt_id.startswith("virt_sc_"):
         sc_id = virt_id.removeprefix("virt_sc_")
