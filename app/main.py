@@ -1,5 +1,13 @@
 import asyncio
 import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    stream=sys.stdout,
+)
+
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
 from app.config import settings
