@@ -328,7 +328,7 @@ async def _download_single_url(url: str) -> str:
             result = await download_yandex(ym_token, track_id, output_dir=output_dir)
             if result:
                 return f"{result['artist']} — {result['title']}"
-            return f"YM failed: {url}"
+            return f"YM unavailable: track {track_id}"
         else:
             virt_id = f"virt_url_{hash(url) & 0xFFFFFFFF:08x}"
             await download_queue.download(

@@ -74,6 +74,11 @@ async def download_yandex(
         filename = f"{_safe(real_artist)} - {_safe(real_title)}__ym_{track_id}.mp3"
         filepath = output_dir / filename
 
+        # Skip if already downloaded
+        if filepath.exists() and filepath.stat().st_size > 0:
+            logger.info("YM already exists: %s", filepath)
+            return {"path": str(filepath), "artist": real_artist, "title": real_title, "album": real_album}
+
         # Download with retry (YM CDN drops connections sometimes)
         last_err = None
         for attempt in range(3):
@@ -86,8 +91,16 @@ async def download_yandex(
                 logger.warning("YM download attempt %d/3 failed for %s: %s", attempt + 1, track_id, e)
                 if attempt < 2:
                     await asyncio.sleep(2 ** attempt)
+
+        # Fallback: try without codec preference if mp3 failed
         if last_err:
-            raise last_err
+            logger.info("YM mp3 failed for %s, trying default codec", track_id)
+            try:
+                await track.download_async(str(filepath))
+                last_err = None
+            except Exception as e:
+                logger.warning("YM fallback download also failed for %s: %s", track_id, e)
+                raise last_err
 
         # Write ID3 tags via ffmpeg
         tagged = str(filepath) + ".tagged.mp3"
