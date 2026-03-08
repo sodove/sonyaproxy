@@ -338,6 +338,14 @@ async def _download_single_url(url: str) -> str:
                 title=url.split("/")[-1][:50],
             )
             return f"{result['artist']} — {result['title']}"
+    except RuntimeError as e:
+        err = str(e)
+        if "geo" in err.lower() or "not available" in err.lower():
+            return f"Geo-blocked: {url.split('/')[-1][:30]}"
+        if "too small" in err.lower() or "timeout" in err.lower():
+            return f"Failed: {url.split('/')[-1][:30]}"
+        logger.warning("URL download failed: %s", url, exc_info=True)
+        return f"Error: {url.split('/')[-1][:30]}"
     except Exception as e:
         logger.warning("URL download failed: %s", url, exc_info=True)
         return f"Error: {url.split('/')[-1][:30]}"

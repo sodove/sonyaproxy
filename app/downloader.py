@@ -136,8 +136,13 @@ class DownloadQueue:
                 self._cleanup_partials(out_template, virt_id)
                 raise RuntimeError(f"yt-dlp timeout for {virt_id}")
             if proc.returncode != 0:
-                logger.error("yt-dlp failed (rc=%d) for %s: %s", proc.returncode, virt_id, stderr.decode()[-500:])
+                err_text = stderr.decode()[-500:]
+                logger.error("yt-dlp failed (rc=%d) for %s: %s", proc.returncode, virt_id, err_text)
                 self._cleanup_partials(out_template, virt_id)
+                if "geo restriction" in err_text.lower() or "not available" in err_text.lower():
+                    raise RuntimeError(f"Geo-restricted: {youtube_url}")
+                if "no video formats" in err_text.lower() or "unable to extract" in err_text.lower():
+                    raise RuntimeError(f"Unavailable: {youtube_url}")
 
             folder = Path(out_template).parent
             youtube_id = virt_id.removeprefix("virt_")
