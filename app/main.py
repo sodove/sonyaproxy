@@ -58,9 +58,14 @@ async def _sync_loop():
 
 
 async def _start_autopop():
+    logger.info("Autopop: waiting %ds before first cycle", settings.autopop_startup_delay)
     await asyncio.sleep(settings.autopop_startup_delay)
-    from app.autopop.loop import autopop_loop
-    await autopop_loop(track_index, download_queue, settings.autopop_flavor_path)
+    logger.info("Autopop: starting loop")
+    try:
+        from app.autopop.loop import autopop_loop
+        await autopop_loop(track_index, download_queue, settings.autopop_flavor_path)
+    except Exception:
+        logger.exception("Autopop loop crashed")
 
 
 _YTDLP_UPDATE_INTERVAL = 24 * 3600  # once per day
@@ -90,6 +95,7 @@ async def _start_bot():
     if not token:
         logger.info("No Telegram bot token, skipping bot startup")
         return
+    logger.info("Starting Telegram bot...")
 
     try:
         from app.bot import start_bot, run_polling
