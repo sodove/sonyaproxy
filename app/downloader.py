@@ -25,6 +25,19 @@ class DownloadQueue:
         folder = Path(self._music_dir) / "Virtual Downloads" / self._safe_path(artist) / "Singles"
         return folder / f"{self._safe_path(title)}__{youtube_id}.%(ext)s"
 
+    def _cleanup_partials(self, out_template: str, virt_id: str):
+        """Remove .part, .ytdl and other temp files left by yt-dlp."""
+        folder = Path(out_template).parent
+        youtube_id = virt_id.removeprefix("virt_")
+        if folder.exists():
+            for f in folder.glob(f"*{youtube_id}*"):
+                if f.suffix in (".part", ".ytdl") or ".part-Frag" in f.name:
+                    try:
+                        f.unlink()
+                        logger.info("Cleaned up: %s", f.name)
+                    except OSError:
+                        pass
+
     async def trigger_rescan(self):
         try:
             async with httpx.AsyncClient() as client:
@@ -38,7 +51,7 @@ class DownloadQueue:
     async def download(
         self, virt_id: str, youtube_url: str, artist: str, title: str,
         trigger_rescan: bool = True,
-    ) -> str:
+    ) -> dict:
         async with self._conn.execute(
             "SELECT status, local_path FROM downloads WHERE id = ?", (virt_id,)
         ) as cur:
@@ -46,7 +59,7 @@ class DownloadQueue:
 
         if row and row["status"] == "done":
             logger.debug("Already downloaded: %s", virt_id)
-            return row["local_path"]
+            return {"path": row["local_path"], "artist": artist, "title": title}
 
         if virt_id in self._events:
             await self._events[virt_id].wait()
@@ -54,7 +67,7 @@ class DownloadQueue:
                 "SELECT local_path FROM downloads WHERE id = ?", (virt_id,)
             ) as cur:
                 row = await cur.fetchone()
-            return row["local_path"]
+            return {"path": row["local_path"], "artist": artist, "title": title}
 
         event = asyncio.Event()
         self._events[virt_id] = event
@@ -65,6 +78,34 @@ class DownloadQueue:
                 (virt_id, youtube_url)
             )
             await self._conn.commit()
+
+            # Fetch metadata first (artist/title) if not provided
+            if artist in ("Unknown", "") and "url" in virt_id:
+                meta_cmd = [
+                    settings.ytdlp_path, "--no-download",
+                    "--print", "%(artist,uploader,channel)s",
+                    "--print", "%(title)s",
+                    "--socket-timeout", "15",
+                    youtube_url,
+                ]
+                meta_proc = await asyncio.create_subprocess_exec(
+                    *meta_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    meta_out, _ = await asyncio.wait_for(meta_proc.communicate(), timeout=30)
+                    lines = meta_out.decode().strip().split("\n")
+                    if len(lines) >= 2:
+                        meta_artist = lines[0].strip()
+                        meta_title = lines[1].strip()
+                        if meta_artist and meta_artist not in ("NA", "None"):
+                            artist = meta_artist
+                        if meta_title and meta_title not in ("NA", "None"):
+                            title = meta_title
+                        # Rebuild output path with real metadata
+                        out_template = str(self._output_path(artist, title, virt_id))
+                        logger.info("Resolved metadata: %s - %s", artist, title)
+                except (asyncio.TimeoutError, Exception):
+                    logger.warning("Metadata fetch failed for %s, using defaults", virt_id)
 
             logger.info("Downloading: %s - %s (%s)", artist, title, virt_id)
             out_template = str(self._output_path(artist, title, virt_id))
@@ -89,14 +130,25 @@ class DownloadQueue:
                 proc.kill()
                 await proc.wait()
                 logger.error("yt-dlp timed out (300s) for %s: %s", virt_id, youtube_url)
+                self._cleanup_partials(out_template, virt_id)
                 raise RuntimeError(f"yt-dlp timeout for {virt_id}")
             if proc.returncode != 0:
                 logger.error("yt-dlp failed (rc=%d) for %s: %s", proc.returncode, virt_id, stderr.decode()[-500:])
+                self._cleanup_partials(out_template, virt_id)
 
             folder = Path(out_template).parent
             youtube_id = virt_id.removeprefix("virt_")
-            matches = list(folder.glob(f"*{youtube_id}*"))
+            matches = [f for f in folder.glob(f"*{youtube_id}*")
+                       if f.suffix not in (".part", ".ytdl") and ".part-Frag" not in f.name]
             local_path = str(matches[0]) if matches else out_template.replace("%(ext)s", settings.ytdlp_audio_format)
+
+            # Validate file size (< 50KB is likely a preview/garbage)
+            lp = Path(local_path)
+            if not lp.exists() or lp.stat().st_size < 50_000:
+                logger.error("Download too small or missing (%s bytes): %s",
+                             lp.stat().st_size if lp.exists() else 0, local_path)
+                self._cleanup_partials(out_template, virt_id)
+                raise RuntimeError(f"Download failed or too small for {virt_id}")
 
             # Write ID3 tags via ffmpeg
             if Path(local_path).exists():
@@ -129,7 +181,7 @@ class DownloadQueue:
             if trigger_rescan:
                 await self.trigger_rescan()
 
-            return local_path
+            return {"path": local_path, "artist": artist, "title": title}
 
         except Exception:
             await self._conn.execute(

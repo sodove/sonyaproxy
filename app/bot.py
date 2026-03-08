@@ -291,13 +291,13 @@ async def _download_track(track: dict) -> str | None:
         if not url:
             return None
 
-        path = await download_queue.download(
+        result = await download_queue.download(
             virt_id=virt_id,
             youtube_url=url,
             artist=track.get("artist", "Unknown"),
             title=track.get("title", "Unknown"),
         )
-        return path
+        return result["path"]
 
 
 def _safe(s: str) -> str:
@@ -331,13 +331,13 @@ async def _download_single_url(url: str) -> str:
             return f"YM unavailable: track {track_id}"
         else:
             virt_id = f"virt_url_{hash(url) & 0xFFFFFFFF:08x}"
-            await download_queue.download(
+            result = await download_queue.download(
                 virt_id=virt_id,
                 youtube_url=url,
                 artist="Unknown",
                 title=url.split("/")[-1][:50],
             )
-            return f"OK: {url.split('/')[-1][:40]}"
+            return f"{result['artist']} — {result['title']}"
     except Exception as e:
         logger.warning("URL download failed: %s", url, exc_info=True)
         return f"Error: {url.split('/')[-1][:30]}"

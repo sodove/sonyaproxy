@@ -232,15 +232,17 @@ async def handle_virtual_stream(request: Request, params: dict) -> Response:
     elif virt_id.startswith("virt_sc_"):
         sc_id = virt_id.removeprefix("virt_sc_")
         url = f"https://api.soundcloud.com/tracks/{sc_id}"
-        local_path = await download_queue.download(
+        result = await download_queue.download(
             virt_id=virt_id, youtube_url=url, artist="Unknown", title=sc_id,
         )
+        local_path = result["path"]
     else:
         youtube_id = virt_id.removeprefix("virt_yt_")
         url = f"https://www.youtube.com/watch?v={youtube_id}"
-        local_path = await download_queue.download(
+        result = await download_queue.download(
             virt_id=virt_id, youtube_url=url, artist="Unknown", title=youtube_id,
         )
+        local_path = result["path"]
 
     from pathlib import Path
     ext = Path(local_path).suffix.lstrip(".")
