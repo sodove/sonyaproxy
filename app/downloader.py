@@ -109,14 +109,17 @@ class DownloadQueue:
 
             logger.info("Downloading: %s - %s (%s)", artist, title, virt_id)
             out_template = str(self._output_path(artist, title, virt_id))
+            is_sc = "soundcloud.com" in youtube_url
             cmd = [
                 settings.ytdlp_path,
                 "-f", self._format,
                 "-x", "--audio-format", settings.ytdlp_audio_format,
                 "-o", out_template,
                 "--no-playlist",
-                "--socket-timeout", "30",
-                "--retries", "3",
+                "--socket-timeout", "60" if is_sc else "30",
+                "--retries", "5" if is_sc else "3",
+                "--force-ipv4",
+                *(["--geo-bypass"] if is_sc else []),
                 youtube_url,
             ]
             proc = await asyncio.create_subprocess_exec(
