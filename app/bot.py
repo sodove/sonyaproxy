@@ -148,10 +148,15 @@ async def handle_text(message: Message):
 
     text = message.text.strip()
 
-    # URL detection
-    if _URL_RE.search(text):
-        await _handle_url(message, text)
-        return
+    # URL detection — extract all URLs from message
+    urls = _URL_RE.findall(text)
+    if urls:
+        # Extract full URLs from the text
+        full_urls = re.findall(r'https?://\S+', text)
+        supported = [u for u in full_urls if _URL_RE.search(u)]
+        if supported:
+            await _handle_urls(message, supported)
+            return
 
     # Text search
     await _handle_search(message, text)
@@ -300,51 +305,63 @@ def _safe(s: str) -> str:
     return _re.sub(r'[<>:"/\\|?*]', '_', s)
 
 
-async def _handle_url(message: Message, url: str):
-    status_msg = await message.answer("Downloading from URL...")
-
+async def _download_single_url(url: str) -> str:
+    """Download a single URL, return status string."""
     from app.main import download_queue
     from app.config import settings
     from pathlib import Path
 
     try:
         if "music.yandex." in url:
-            # Extract track ID from URL
-            import re
             m = re.search(r'/track/(\d+)', url)
             if not m:
-                await status_msg.edit_text("Can't parse Yandex Music URL. Expected /track/ID format.")
-                return
+                return f"Can't parse YM URL: {url}"
 
             track_id = int(m.group(1))
             conn = download_queue._conn
             ym_token = await get_setting(conn, "yandex_token")
             if not ym_token:
-                await status_msg.edit_text("Yandex Music token not set. Configure in /admin/")
-                return
+                return "YM token not set"
 
             from app.sources.yandex_music import download_yandex
             output_dir = Path(settings.gonic_music_dir) / "Virtual Downloads" / "Yandex Music" / "Singles"
             result = await download_yandex(ym_token, track_id, output_dir=output_dir)
             if result:
-                await download_queue.trigger_rescan()
-                await status_msg.edit_text(f"Downloaded: {result['artist']} — {result['title']}")
-            else:
-                await status_msg.edit_text("YM download failed.")
+                return f"{result['artist']} — {result['title']}"
+            return f"YM failed: {url}"
         else:
-            # YouTube / SoundCloud via yt-dlp
             virt_id = f"virt_url_{hash(url) & 0xFFFFFFFF:08x}"
-            path = await download_queue.download(
+            await download_queue.download(
                 virt_id=virt_id,
                 youtube_url=url,
                 artist="Unknown",
                 title=url.split("/")[-1][:50],
             )
-            await status_msg.edit_text(f"Downloaded!")
-
+            return f"OK: {url.split('/')[-1][:40]}"
     except Exception as e:
-        logger.warning("Bot URL download failed", exc_info=True)
-        await status_msg.edit_text(f"Error: {e}")
+        logger.warning("URL download failed: %s", url, exc_info=True)
+        return f"Error: {url.split('/')[-1][:30]}"
+
+
+async def _handle_urls(message: Message, urls: list[str]):
+    from app.main import download_queue
+
+    status_msg = await message.answer(f"Downloading {len(urls)} link(s)...")
+
+    results = []
+    for i, url in enumerate(urls):
+        if len(urls) > 1:
+            try:
+                await status_msg.edit_text(f"Downloading {i+1}/{len(urls)}...")
+            except Exception:
+                pass
+        result = await _download_single_url(url)
+        results.append(result)
+
+    await download_queue.trigger_rescan()
+
+    text = "\n".join(f"• {r}" for r in results)
+    await status_msg.edit_text(f"Done!\n{text}")
 
 
 def _make_dispatcher() -> Dispatcher:
