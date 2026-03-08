@@ -72,14 +72,18 @@ async def _scrape_sc_playlist(url: str) -> list[dict[str, Any]]:
 
             # First attempt
             try:
+                logger.info("SC scrape: loading %s", url)
                 await page.goto(url, wait_until="networkidle", timeout=_GOTO_TIMEOUT)
                 tracks = await _extract_tracks(page)
+                logger.info("SC scrape: got %d tracks from %s", len(tracks), url)
             except Exception as first_err:
                 logger.warning("SC chart first attempt failed, retrying: %s", first_err)
                 # Retry once with reload
                 try:
+                    logger.info("SC scrape: retrying %s", url)
                     await page.reload(wait_until="networkidle", timeout=_RETRY_TIMEOUT)
                     tracks = await _extract_tracks(page)
+                    logger.info("SC scrape: retry got %d tracks from %s", len(tracks), url)
                 except Exception:
                     logger.warning("SC chart retry also failed: %s", url, exc_info=True)
 

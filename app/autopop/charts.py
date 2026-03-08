@@ -18,6 +18,7 @@ async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
         total_per_region[region] = total_per_region.get(region, 0) + q["count"]
 
     for region, count in total_per_region.items():
+        logger.info("Fetching YT Music chart: region=%s, limit=%d", region, count)
         yt_tasks.append(asyncio.ensure_future(
             fetch_ytmusic_chart(region, limit=count)
         ))
@@ -32,6 +33,8 @@ async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
             sc_jobs.append((genre, region, q["count"]))
 
     # Run YT and SC concurrently, but SC charts are sequential among themselves
+    logger.info("Chart fetch: %d YT tasks, %d SC jobs", len(yt_tasks), len(sc_jobs))
+
     async def _fetch_sc_sequential() -> list[dict]:
         all_tracks: list[dict] = []
         for genre, region, count in sc_jobs:
@@ -50,6 +53,7 @@ async def fetch_all_charts(quotas: list[dict]) -> list[dict[str, Any]]:
 
     seen: set[str] = set()
     merged: list[dict] = []
+    logger.info("Chart fetch complete: %d sources returned", len(results))
     for batch in results:
         if isinstance(batch, BaseException):
             logger.warning("Chart source failed: %s", batch)

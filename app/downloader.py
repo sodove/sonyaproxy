@@ -1,7 +1,9 @@
-import asyncio, re, httpx
+import asyncio, logging, re, httpx
 from pathlib import Path
 from app.db import init_db
 from app.config import settings
+
+logger = logging.getLogger("sonyaproxy.downloader")
 
 
 class DownloadQueue:
@@ -43,6 +45,7 @@ class DownloadQueue:
             row = await cur.fetchone()
 
         if row and row["status"] == "done":
+            logger.debug("Already downloaded: %s", virt_id)
             return row["local_path"]
 
         if virt_id in self._events:
@@ -63,6 +66,7 @@ class DownloadQueue:
             )
             await self._conn.commit()
 
+            logger.info("Downloading: %s - %s (%s)", artist, title, virt_id)
             out_template = str(self._output_path(artist, title, virt_id))
             cmd = [
                 settings.ytdlp_path,
@@ -77,7 +81,9 @@ class DownloadQueue:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await proc.communicate()
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                logger.error("yt-dlp failed (rc=%d) for %s: %s", proc.returncode, virt_id, stderr.decode()[-500:])
 
             folder = Path(out_template).parent
             youtube_id = virt_id.removeprefix("virt_")
@@ -102,6 +108,9 @@ class DownloadQueue:
                 await tag_proc.communicate()
                 if tag_proc.returncode == 0:
                     Path(tagged).replace(local_path)
+                    logger.info("Downloaded OK: %s -> %s", virt_id, local_path)
+                else:
+                    logger.warning("ffmpeg tagging failed (rc=%d) for %s", tag_proc.returncode, virt_id)
 
             await self._conn.execute(
                 "UPDATE downloads SET status='done', local_path=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
